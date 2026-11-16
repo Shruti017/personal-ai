@@ -10,3 +10,4 @@ server/.env
 server/uploads/
 server/runtime/
 client/dist/
+public/

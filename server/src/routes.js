@@ -3,25 +3,19 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 import path from "node:path";
-import fs from "node:fs/promises";
 import { config } from "./config.js";
 import { User, Conversation, StoredFile, Memory, Task } from "./models.js";
 import { requireAuth } from "./middleware.js";
 import { processFile, imageMimes } from "./fileProcessor.js";
+import { deleteStoredFile, readStoredFile, storeUploadedFile } from "./fileStorage.js";
 import { streamChat } from "./ai.js";
 import { runAgent, decideApproval } from "./agent.js";
 import { Activity, Approval } from "./models.js";
 
 const router = express.Router();
-const uploadDir = path.resolve("uploads");
-await fs.mkdir(uploadDir, { recursive: true });
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => cb(null, `${Date.now()}-${Math.random().toString(16).slice(2)}${path.extname(file.originalname).toLowerCase()}`)
-});
 const upload = multer({
-  storage,
-  limits: { fileSize: config.maxFileMb * 1024 * 1024, files: 5 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: Math.min(config.maxFileMb, config.isVercel ? 3 : config.maxFileMb) * 1024 * 1024, files: 5 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const allowed = new Set([".png",".jpg",".jpeg",".webp",".gif",".pdf",".docx",".pptx",".txt",".md",".rtf",".odt",".html",".htm",".xlsx",".csv",".js",".jsx",".ts",".tsx",".py",".java",".c",".cpp",".h",".hpp",".php",".css",".json",".xml",".yml",".yaml",".sql",".sh",".zip"]);
@@ -88,16 +82,18 @@ router.delete("/conversations/:id", requireAuth, async (req,res) => {
 router.post("/files", requireAuth, upload.array("files", 5), async (req,res) => {
   const results = [];
   for (const file of req.files || []) {
+    let storedName;
     try {
       const parsed = await processFile(file);
+      storedName = await storeUploadedFile(file.buffer, file.originalname, req.userId);
       const record = await StoredFile.create({
-        userId: req.userId, originalName: file.originalname.slice(0,240), storedName: file.filename,
+        userId: req.userId, originalName: file.originalname.slice(0,240), storedName,
         mimeType: file.mimetype, size: file.size, status: "ready",
         extractedText: parsed.text.slice(0, 2_000_000), chunks: parsed.chunks.slice(0, 2000)
       });
       results.push({ id: record._id, name: record.originalName, status: record.status, chars: record.extractedText.length, chunks: record.chunks.length });
     } catch (error) {
-      await fs.unlink(file.path).catch(()=>{});
+      if (storedName) await deleteStoredFile(storedName).catch(() => {});
       results.push({ name: file.originalname, status: "failed", error: error.message });
     }
   }
@@ -110,7 +106,7 @@ router.get("/files", requireAuth, async (req,res) => {
 router.delete("/files/:id", requireAuth, async (req,res) => {
   const file = await StoredFile.findOne({ _id: req.params.id, userId: req.userId });
   if (!file) return res.status(404).json({ error: "File not found" });
-  await fs.unlink(path.join(uploadDir, path.basename(file.storedName))).catch(()=>{});
+  await deleteStoredFile(file.storedName);
   await file.deleteOne();
   res.json({ ok: true });
 });
@@ -218,7 +214,7 @@ router.post("/chat/stream", requireAuth, async (req,res) => {
         const file = files.find(f => f._id.toString() === attachment.fileId);
         if (file && imageMimes.has(file.mimeType)) {
           try {
-            const imageBytes = await fs.readFile(path.join(uploadDir, path.basename(file.storedName)));
+            const imageBytes = await readStoredFile(file.storedName);
             content.push({ type: "image_url", image_url: { url: `data:${file.mimeType};base64,${imageBytes.toString("base64")}` } });
           } catch {}
         }

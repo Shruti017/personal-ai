@@ -221,7 +221,7 @@ async function readZipEntriesFromBuffer(buffer, limits) {
 }
 
 export async function processFile(file) {
-  const buffer = await fs.readFile(file.path);
+  const buffer = file.buffer || await fs.readFile(file.path);
   return extractBuffer(file.originalname, buffer, file.mimetype);
 }
 

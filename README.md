@@ -84,7 +84,13 @@ The project includes a multi-stage Docker build. It builds the React client and 
 
 4. Check `http://localhost:5000/health` and open `http://localhost:5000`.
 
-The Compose setup persists uploaded files in a named volume. For a platform that builds directly from a Dockerfile, use the included `Dockerfile`, provide the same environment variables through the platform's secret manager, and expose port `5000`. Set `TRUST_PROXY=1` only when the app is behind one trusted reverse proxy. Configure HTTPS at the hosting platform or reverse proxy.
+Uploaded files are stored in MongoDB GridFS. For a platform that builds directly from a Dockerfile, use the included `Dockerfile`, provide the same environment variables through the platform's secret manager, and expose port `5000`. Set `TRUST_PROXY=1` only when the app is behind one trusted reverse proxy. Configure HTTPS at the hosting platform or reverse proxy.
+
+## Vercel deployment
+
+This repository is configured as one Vercel project from the repository root. Import `Shruti017/personal-ai` and keep the Root Directory as `./` (`personal-ai`), not `client` or `server`. Vercel builds the React client into `public/` and runs the root Express entrypoint as a function; uploaded files are stored in MongoDB GridFS so they survive between function invocations.
+
+Add these secrets in Vercel Project Settings → Environment Variables for Production (and Preview if needed): `MONGODB_URI`, `JWT_SECRET` (random, at least 32 characters), `AI_PROVIDER`, and the selected provider key (`GEMINI_API_KEY` or `OPENAI_API_KEY`). `TAVILY_API_KEY` is optional. Enable Vercel system environment variables so the API accepts the project's Vercel deployment origins. Vercel functions limit request bodies to 4.5 MB, so uploads are capped at 3 MB each and a single upload request must remain under the platform limit. Docker-based code execution remains disabled. The AI provider's account/project must have usable API quota; deployment does not change provider billing eligibility.
 
 ## Agent tools
 

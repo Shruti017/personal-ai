@@ -25,6 +25,9 @@ const clientOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
   .split(",")
   .map(origin => origin.trim())
   .filter(Boolean);
+for (const host of [process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL].filter(Boolean)) {
+  clientOrigins.push(`https://${host}`);
+}
 
 export const config = {
   port: Number(process.env.PORT || 5000),
@@ -43,5 +46,6 @@ export const config = {
   enableOcr: process.env.ENABLE_OCR === "true",
   ocrLanguages: process.env.OCR_LANGUAGES || "eng+ben",
   trustProxy: process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true" ? 1 : false,
-  isProduction: process.env.NODE_ENV === "production"
+  isProduction: process.env.NODE_ENV === "production",
+  isVercel: process.env.VERCEL === "1"
 };

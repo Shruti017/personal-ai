@@ -35,9 +35,14 @@ function explainMongoError(error) {
   return "Check the MongoDB URI, database user permissions, Atlas IP access list, and network connection. The detailed driver error is printed below without exposing your URI.";
 }
 
+let connectionPromise;
+
 export async function connectDB() {
+  if (mongoose.connection.readyState === 1) return;
+  if (connectionPromise) return connectionPromise;
   const uri = getMongoUri();
-  try {
+  connectionPromise = (async () => {
+   try {
     await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 15000,
       connectTimeoutMS: 10000,
@@ -53,12 +58,18 @@ export async function connectDB() {
     mongoose.connection.on("disconnected", () => {
       console.warn("MongoDB disconnected. Check the database/network connection.");
     });
-  } catch (error) {
+   } catch (error) {
     console.error("\nMongoDB connection failed.");
     console.error(explainMongoError(error));
     const safeDetail = String(error?.message || "Unknown error").replace(/mongodb(?:\+srv)?:\/\/[^\s]+/gi, "mongodb://<redacted>");
     console.error(`Driver detail: ${error?.name || "Error"}${error?.code ? ` (${error.code})` : ""}: ${safeDetail}`);
     console.error("The MONGODB_URI value has not been printed. Check server/.env locally.\n");
     throw error;
+   }
+  })();
+  try {
+    await connectionPromise;
+  } finally {
+    connectionPromise = undefined;
   }
 }

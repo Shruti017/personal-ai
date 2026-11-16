@@ -21,11 +21,10 @@ COPY server/package.json server/package.json
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=build /app/server/src ./server/src
-COPY --from=build /app/client/dist ./client/dist
-RUN mkdir -p /app/uploads /app/runtime && chown -R node:node /app
+COPY --from=build /app/public ./public
+RUN mkdir -p /app/runtime && chown -R node:node /app
 
 USER node
 EXPOSE 5000
-VOLUME ["/app/uploads"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 CMD node -e "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server/src/index.js"]
