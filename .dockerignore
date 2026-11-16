@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+client/dist
+server/.env
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+server/uploads
+server/runtime
+uploads
+runtime
+npm-debug.log*
